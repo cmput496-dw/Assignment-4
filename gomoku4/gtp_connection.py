@@ -577,7 +577,7 @@ def MCTS(board, color_to_play):
         return best_move
     #make sure search doesn't exceed the time
     #we build the tree with the time we have
-    while ( (time.time() - start_time) < 20):
+    while ( (time.time() - start_time) < 30):
 
         color_to_play = original_color
         search_board = board.copy()
@@ -640,8 +640,8 @@ def MCTS(board, color_to_play):
         #Collect the best move so far
         best_move = FindBestMove(search_board, search_tree, original_parent_key)
         
-    new_list = MakeDictionayJSON(search_tree)
-    DictionaryToJson(new_list)
+   # new_list = MakeDictionayJSON(search_tree)
+    DictionaryToJson(search_tree)
     return best_move
     
 
@@ -665,10 +665,10 @@ def FindBestMove(board, search_tree, parent_key):
             
             best_move = state.move
 
-    #DEBUG - remove later
-    move_coord = point_to_coord(best_move, board.size)
-    move_as_string = format_point(move_coord)
-    print(move_as_string, str(max_ratio), str(max_win), ":", str(max_sims))
+            #DEBUG - remove later
+            move_coord = point_to_coord(best_move, board.size)
+            move_as_string = format_point(move_coord)
+            print(move_as_string, str(max_ratio), str(max_win), ":", str(max_sims))
     
     return best_move
 
@@ -677,7 +677,7 @@ def FindBestMove(board, search_tree, parent_key):
 def BackProp(search_tree, parent_key, iswin, stop_key):
 
     #DEBUG - remove later
-    print("back-propogating")
+    #print("back-propogating")
 
     if (iswin):
         win_delta = 1
@@ -692,7 +692,7 @@ def BackProp(search_tree, parent_key, iswin, stop_key):
         search_tree[parent_key].losses += loss_delta
 
         #DEBUG - remove later
-        print(str(search_tree[parent_key].wins / search_tree[parent_key].simulations))
+        #print(str(search_tree[parent_key].wins / search_tree[parent_key].simulations))
 
         parent_key = search_tree[parent_key].parent
 
@@ -720,16 +720,22 @@ def GetMaxInKeyList(search_tree, key_list):
 
 #convert dictionary to json
 def DictionaryToJson(dictlist):
-    json_var = json.dumps(dictlist)
+    #json_var = json.dumps([ob.__dict__ for ob in dictlist])
+    json_var = MakeDictionayJSON(dictlist)
     with open('data.json', 'w') as outfile:
         json.dump(json_var, outfile)
+    #DEBUG - remove later
+    #print(json_var)
     return
 
 def MakeDictionayJSON(dictionary):
     new_list = dict()
     for key in dictionary:
-        new_list[key] = dictionary[key].toJSON
-    return new_list
+        obj = dictionary[key]
+        json_obj = json.dumps(vars(obj).__str__())
+        new_list[key] = json_obj
+    json_string = json.dumps(new_list)
+    return json_string
         
 class GameState:
 
@@ -741,4 +747,4 @@ class GameState:
         self.move = move
 
     def toJSON(self):
-        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
+        return json.dumps(self.__dict__)
