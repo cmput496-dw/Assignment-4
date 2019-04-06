@@ -1,6 +1,7 @@
 """
 gtp_connection.py
 Module for playing games of Go using GoTextProtocol
+
 Parts of this code were originally based on the gtp module 
 in the Deep-Go project by Isaac Henrion and Amos Storkey 
 at the University of Edinburgh.
@@ -21,6 +22,7 @@ class GtpConnection():
     def __init__(self, go_engine, board, debug_mode = False):
         """
         Manage a GTP connection for a Go-playing engine
+
         Parameters
         ----------
         go_engine:
@@ -537,7 +539,7 @@ def DoRollouts(board, num, color):
         elif outcome == 0:
             num_losses = num_losses + 1
 
-    if (num_wins/(num_wins+num_losses)) > 0.3:
+    if num_wins >= num_losses:
         return 1
     else:
         return 0
@@ -573,6 +575,7 @@ def MCTS(board, color_to_play):
     #check for full board
     if (len(moves) == 0):
         return best_move
+    
     #make sure search doesn't exceed the time
     #we build the tree with the time we have
     while ( (time.time() - start_time) < 50):
@@ -614,20 +617,22 @@ def MCTS(board, color_to_play):
 
             temp_board = search_board.copy()
             temp_board.play_move_gomoku(move, color_to_play)
+
+            
             result = DoRollouts(temp_board.copy(), 15, color_to_play)
 
-            #we need to compute the game result with respect to the original color
-            if (result == 1 and color_to_play == original_color) or (result == 0 and color_to_play != original_color):
-                game_result = 1
-            else:
-                game_result = 0
-                
+            
+
+            game_result = ComputeGameResult(result, color_to_play, original_color)
+            
+
             if game_result == 1:
                 new_gamestate = GameState(1,1,0, parent_key, move)
                 BackProp(search_tree, parent_key, True, original_parent_key)
             else:
                 new_gamestate = GameState(1,0,1, parent_key, move)
                 BackProp(search_tree, parent_key, False, original_parent_key)
+            
 
             move_key = boardstate_as_key(temp_board)
             search_tree[move_key] = new_gamestate
@@ -746,3 +751,11 @@ class GameState:
 
     def toJSON(self):
         return json.dumps(self.__dict__)
+
+def ComputeGameResult(result, color_to_play, original_color):
+    #we need to compute the game result with respect to the original color
+    if (result == 1 and color_to_play == original_color) or (result == 0 and color_to_play != original_color):
+        game_result = 1
+    else:
+        game_result = 0
+    return game_result
