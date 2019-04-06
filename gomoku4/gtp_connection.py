@@ -544,7 +544,7 @@ def DoRollouts(board, num, color):
         elif outcome == 0:
             num_losses = num_losses + 1
 
-    if (num_wins/(num_wins+num_losses)) > 0.3:
+    if (num_wins/(num_wins+num_losses)) > 0.4:
         return 1
     else:
         return 0
@@ -621,7 +621,7 @@ def MCTS(board, color_to_play):
 
             temp_board = search_board.copy()
             temp_board.play_move_gomoku(move, color_to_play)
-            result = DoRollouts(temp_board.copy(), 12, color_to_play)
+            result = DoRollouts(temp_board.copy(), 10, color_to_play)
 
             #we need to compute the game result with respect to the original color
             if (result == 1 and color_to_play == original_color) or (result == 0 and color_to_play != original_color):
