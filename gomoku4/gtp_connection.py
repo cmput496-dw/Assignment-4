@@ -442,8 +442,8 @@ class GtpConnection():
         #self.respond(str(result))
 
         #test MCTS
-        best_move = MCTS(self.board.copy(), BLACK)
-        move_coord = point_to_coord(best_move, self.board.size)
+        b_move = MCTS(self.board.copy(), BLACK)
+        move_coord = point_to_coord(b_move, self.board.size)
         move_as_string = format_point(move_coord)
         self.respond(move_as_string)
         
@@ -577,7 +577,7 @@ def MCTS(board, color_to_play):
         return best_move
     #make sure search doesn't exceed the time
     #we build the tree with the time we have
-    while ( (time.time() - start_time) < 30):
+    while ( (time.time() - start_time) < 50):
 
         color_to_play = original_color
         search_board = board.copy()
@@ -616,7 +616,7 @@ def MCTS(board, color_to_play):
 
             temp_board = search_board.copy()
             temp_board.play_move_gomoku(move, color_to_play)
-            result = DoRollouts(temp_board.copy(), 10, color_to_play)
+            result = DoRollouts(temp_board.copy(), 15, color_to_play)
 
             #we need to compute the game result with respect to the original color
             if (result == 1 and color_to_play == original_color) or (result == 0 and color_to_play != original_color):
