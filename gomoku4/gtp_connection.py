@@ -13,6 +13,9 @@ from board_util import GoBoardUtil, BLACK, WHITE, EMPTY, BORDER, PASS, \
 import numpy as np
 import re
 import signal
+import time
+import random
+import json
 
 class GtpConnection():
 
@@ -56,7 +59,8 @@ class GtpConnection():
             "solve": self.solve_cmd,
             "list_solve_point": self.list_solve_point_cmd, # below is added for Gomoku3
             "policy": self.set_playout_policy, 
-            "policy_moves": self.display_pattern_moves
+            "policy_moves": self.display_pattern_moves,
+            "test": self.TestFunction
         }
         self.timelimit=60
 
@@ -423,6 +427,27 @@ class GtpConnection():
     def list_solve_point_cmd(self, args):
         self.respond(self.board.list_solve_point())
 
+    def TestFunction(self, args):
+        #test rollout
+        #board_copy = self.board.copy()
+        #result = rollout(board_copy, BLACK, BLACK)
+        #self.respond(str(result))
+
+        #test boardstate as key
+        #self.respond(boardstate_as_key(self.board))
+
+        #test DoRollouts
+        #temp_board = self.board.copy()
+        #result = DoRollouts(temp_board, 30, BLACK)
+        #self.respond(str(result))
+
+        #test MCTS
+        best_move = MCTS(self.board.copy(), BLACK)
+        move_coord = point_to_coord(best_move, self.board.size)
+        move_as_string = format_point(move_coord)
+        self.respond(move_as_string)
+        
+
 def point_to_coord(point, boardsize):
     """
     Transform point given as board array index 
@@ -480,3 +505,240 @@ def color_to_int(c):
     color_to_int = {"b": BLACK , "w": WHITE, "e": EMPTY, 
                     "BORDER": BORDER}
     return color_to_int[c] 
+
+
+#MCTS Functions
+def rollout(board, original_color, color_to_play):
+    game_end, winner = board.check_game_end_gomoku()
+
+    #check to see if the game has ended
+    if game_end:
+        if winner == original_color:
+            return 1
+        else:
+            return 0
+    move = GoBoardUtil.generate_random_move_gomoku(board)
+    if move == PASS:
+        return 0
+
+    #so the game hasn't ended. Play the move for the color to play
+    board.play_move_gomoku(move, color_to_play)
+    return rollout(board, original_color, GoBoardUtil.opponent(color_to_play))
+
+#returns number
+def DoRollouts(board, num, color):
+    num_wins = 0
+    num_losses = 0
+
+    #do rollouts
+    for i in range(num):
+        temp_board = board.copy()
+        outcome = rollout(temp_board, color, color)
+        if outcome == 1:
+            num_wins = num_wins + 1
+        elif outcome == 0:
+            num_losses = num_losses + 1
+
+    if num_wins >= num_losses:
+        return 1
+    else:
+        return 0
+        
+
+def boardstate_as_key(board):
+    string = str(GoBoardUtil.get_twoD_board(board))
+    string = string.replace('\n', '')
+    string = string.replace(']', '')
+    string = string.replace('[', '')
+    string = string.replace(' ', '')
+    return string
+
+def MCTS(board, color_to_play):
+
+    #DEBUG VARIABLE - remove later
+    test_move_key = None;
+    
+    #initialize dictionary
+    search_tree = dict()
+
+    #initialize time
+    start_time = time.time()
+
+    
+    best_move = PASS
+    search_board = board.copy()
+    original_color = color_to_play
+    parent_key = boardstate_as_key(board.copy())
+    original_parent_key = parent_key
+    moves = GoBoardUtil.generate_legal_moves_gomoku(search_board)
+
+    #check for full board
+    if (len(moves) == 0):
+        return best_move
+    #make sure search doesn't exceed the time
+    #we build the tree with the time we have
+    while ( (time.time() - start_time) < 20):
+
+        color_to_play = original_color
+        search_board = board.copy()
+
+        #SELECTION
+        if (best_move != PASS):
+
+            #initialize by first visitng the best move we have so farr
+            search_board.play_move_gomoku(best_move, color_to_play)
+            color_to_play = GoBoardUtil.opponent(color_to_play)
+            iterator_key = boardstate_as_key(search_board)
+            parent_key = iterator_key
+
+            while (iterator_key in search_tree):
+                child_list = FindChildrenOfParent(search_tree, iterator_key)
+                if len(child_list) == 0:
+                    break
+                
+                iterator_key = GetMaxInKeyList(search_tree, child_list)
+                parent_key = iterator_key
+                search_board.play_move_gomoku(search_tree[iterator_key].move, color_to_play)
+                color_to_play = GoBoardUtil.opponent(color_to_play)
+
+            #generate a sample of new moves
+            full_moves = GoBoardUtil.generate_legal_moves_gomoku(search_board)
+            random.shuffle(full_moves)
+            moves = list()
+            x = 5
+            while (x > 0) and (len(full_moves) !=0):
+                moves.append(full_moves.pop())
+                x -= 1
+
+        #EXPANSION
+        #do a rollout with each move, store the result of each in the dictionary
+        for move in moves:
+
+            temp_board = search_board.copy()
+            temp_board.play_move_gomoku(move, color_to_play)
+            result = DoRollouts(temp_board.copy(), 10, color_to_play)
+
+            #we need to compute the game result with respect to the original color
+            if (result == 1 and color_to_play == original_color) or (result == 0 and color_to_play != original_color):
+                game_result = 1
+            else:
+                game_result = 0
+                
+            if game_result == 1:
+                new_gamestate = GameState(1,1,0, parent_key, move)
+                BackProp(search_tree, parent_key, True, original_parent_key)
+            else:
+                new_gamestate = GameState(1,0,1, parent_key, move)
+                BackProp(search_tree, parent_key, False, original_parent_key)
+
+            move_key = boardstate_as_key(temp_board)
+            search_tree[move_key] = new_gamestate
+
+            #TEMP - for debugging, remove later
+            test_move_key = move_key
+
+        #Collect the best move so far
+        best_move = FindBestMove(search_board, search_tree, original_parent_key)
+        
+    new_list = MakeDictionayJSON(search_tree)
+    DictionaryToJson(new_list)
+    return best_move
+    
+
+#iterate through dictionary, grab the state with the highest 
+def FindBestMove(board, search_tree, parent_key):
+    max_ratio = 0
+    #DEBUG VARS
+    max_win = 0
+    max_sims = 0
+    best_move = PASS
+    for key in search_tree:
+        state = search_tree[key]
+        if state.parent != parent_key:
+            continue
+        if (state.wins/state.simulations) > max_ratio:
+            max_ratio = state.wins/state.simulations
+
+            #DEBUG - remove later
+            max_win = state.wins
+            max_sims = state.simulations
+            
+            best_move = state.move
+
+    #DEBUG - remove later
+    move_coord = point_to_coord(best_move, board.size)
+    move_as_string = format_point(move_coord)
+    print(move_as_string, str(max_ratio), str(max_win), ":", str(max_sims))
+    
+    return best_move
+
+
+#backpropogate and update parents
+def BackProp(search_tree, parent_key, iswin, stop_key):
+
+    #DEBUG - remove later
+    print("back-propogating")
+
+    if (iswin):
+        win_delta = 1
+        loss_delta = 0
+    else:
+        win_delta = 0
+        loss_delta = 1
+
+    while (parent_key != stop_key):
+        search_tree[parent_key].simulations += 1
+        search_tree[parent_key].wins += win_delta
+        search_tree[parent_key].losses += loss_delta
+
+        #DEBUG - remove later
+        print(str(search_tree[parent_key].wins / search_tree[parent_key].simulations))
+
+        parent_key = search_tree[parent_key].parent
+
+#looks through the dictionary to find items which have a particular parent
+#returns list of children keys
+def FindChildrenOfParent(search_tree, parent_string):
+    child_list = list()
+    for key in search_tree:
+        state = search_tree[key]
+        if state.parent == parent_string:
+            child_list.append(key)
+    return child_list
+
+#return the key which has the highest ratio
+def GetMaxInKeyList(search_tree, key_list):
+    max_ratio = 0
+    max_key = None
+    for key in key_list:
+        state = search_tree[key]
+        ratio = state.wins / state.simulations
+        if ratio >= max_ratio:
+            max_key = key
+            max_ratio = ratio
+    return max_key
+
+#convert dictionary to json
+def DictionaryToJson(dictlist):
+    json_var = json.dumps(dictlist)
+    with open('data.json', 'w') as outfile:
+        json.dump(json_var, outfile)
+    return
+
+def MakeDictionayJSON(dictionary):
+    new_list = dict()
+    for key in dictionary:
+        new_list[key] = dictionary[key].toJSON
+    return new_list
+        
+class GameState:
+
+    def __init__(self, simulations, wins, losses, parent, move):
+        self.simulations = simulations
+        self.wins = wins
+        self.losses = losses
+        self.parent = parent
+        self.move = move
+
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
