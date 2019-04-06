@@ -320,6 +320,15 @@ class GtpConnection():
             else:
                 self.respond("resign")
             return
+
+        move = MCTS(self.board.copy(), color)
+        move_coord = point_to_coord(move, self.board.size)
+        move_as_string = format_point(move_coord)
+        if self.board.is_legal_gomoku(move, color):
+            self.board.play_move_gomoku(move, color)
+            self.respond(move_as_string)
+        
+        '''
         moves = self.board.get_empty_points()
         board_is_full = (len(moves) == 0)
         if board_is_full:
@@ -338,14 +347,12 @@ class GtpConnection():
         if move == PASS:
             self.respond("pass")
             return
-        move_coord = point_to_coord(move, self.board.size)
-        move_as_string = format_point(move_coord)
-        if self.board.is_legal_gomoku(move, color):
-            self.board.play_move_gomoku(move, color)
-            self.respond(move_as_string)
+        
+        
         else:
             self.respond("illegal move: {}".format(move_as_string))
-
+        '''
+        
     def gogui_rules_game_id_cmd(self, args):
         self.respond("Gomoku")
     
@@ -614,7 +621,7 @@ def MCTS(board, color_to_play):
 
             temp_board = search_board.copy()
             temp_board.play_move_gomoku(move, color_to_play)
-            result = DoRollouts(temp_board.copy(), 15, color_to_play)
+            result = DoRollouts(temp_board.copy(), 12, color_to_play)
 
             #we need to compute the game result with respect to the original color
             if (result == 1 and color_to_play == original_color) or (result == 0 and color_to_play != original_color):
